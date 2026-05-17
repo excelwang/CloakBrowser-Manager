@@ -288,11 +288,11 @@ export function ProfileViewer({
       aria-label={`Current profile: ${profile.name}`}
     >
       <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-400" />
-      <span className="min-w-0 truncate text-[7px] font-medium">{profile.name}</span>
-      <span className="hidden flex-shrink-0 text-[6px] capitalize text-gray-500 sm:inline">
+      <span className="min-w-0 truncate text-sm font-medium">{profile.name}</span>
+      <span className="hidden flex-shrink-0 text-xs capitalize text-gray-500 sm:inline">
         {profile.platform}
       </span>
-      <span className="flex-shrink-0 rounded bg-surface-3/45 px-1 py-0.5 text-[5px] text-gray-400">
+      <span className="flex-shrink-0 rounded bg-surface-3/45 px-1 py-0.5 text-[10px] text-gray-400">
         {runningProfiles.length}
       </span>
     </button>
