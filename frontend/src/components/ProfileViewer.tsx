@@ -283,16 +283,16 @@ export function ProfileViewer({
   const floatingProfileButton = maximized && (
     <button
       onClick={() => setProfileDrawerOpen(true)}
-      className="absolute left-4 top-4 z-10 flex max-w-[calc(100vw-6rem)] items-center gap-2 rounded-md border border-border bg-surface-1/90 px-3 py-2 text-gray-200 shadow-lg transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-accent/50"
+      className="absolute bottom-4 left-4 z-10 flex max-w-[calc(100vw-6rem)] items-center gap-1 rounded-md border border-border bg-surface-1/35 px-2 py-1.5 text-gray-200 shadow-lg transition-colors hover:bg-surface-2/55 focus:outline-none focus:ring-2 focus:ring-accent/50"
       title={profile.name}
       aria-label={`Current profile: ${profile.name}`}
     >
-      <span className="h-2 w-2 flex-shrink-0 rounded-full bg-emerald-400" />
-      <span className="min-w-0 truncate text-sm font-medium">{profile.name}</span>
-      <span className="hidden flex-shrink-0 text-xs capitalize text-gray-500 sm:inline">
+      <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-400" />
+      <span className="min-w-0 truncate text-[7px] font-medium">{profile.name}</span>
+      <span className="hidden flex-shrink-0 text-[6px] capitalize text-gray-500 sm:inline">
         {profile.platform}
       </span>
-      <span className="flex-shrink-0 rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-gray-400">
+      <span className="flex-shrink-0 rounded bg-surface-3/45 px-1 py-0.5 text-[5px] text-gray-400">
         {runningProfiles.length}
       </span>
     </button>
@@ -301,7 +301,7 @@ export function ProfileViewer({
   const floatingExitButton = maximized && (
     <button
       onClick={onExitMaximize}
-      className="absolute right-4 top-4 z-40 rounded-md border border-border bg-surface-1/90 p-2 text-gray-200 shadow-lg transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-accent/50"
+      className="absolute bottom-4 right-4 z-40 rounded-md border border-border bg-surface-1/35 p-2 text-gray-200 shadow-lg transition-colors hover:bg-surface-2/55 focus:outline-none focus:ring-2 focus:ring-accent/50"
       title="Exit maximized VNC"
       aria-label="Exit maximized VNC"
     >
