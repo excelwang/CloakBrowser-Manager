@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { ClipboardCopy, Code2, Maximize2, Minimize2 } from "lucide-react";
-import { api } from "../lib/api";
+import { ClipboardCopy, Code2, Maximize2, Minimize2, X } from "lucide-react";
+import { api, type Profile } from "../lib/api";
 
 interface ProfileViewerProps {
+  profile: Profile;
+  runningProfiles: Profile[];
   profileId: string;
   cdpUrl: string | null;
   clipboardSync: boolean;
   maximized: boolean;
+  onSelectRunningProfile: (id: string) => void;
   onExitMaximize: () => void;
   onDisconnect: () => void;
 }
@@ -15,10 +18,13 @@ interface ProfileViewerProps {
 const XK_v = 0x0076;
 
 export function ProfileViewer({
+  profile,
+  runningProfiles,
   profileId,
   cdpUrl,
   clipboardSync: initialClipboardSync,
   maximized,
+  onSelectRunningProfile,
   onExitMaximize,
   onDisconnect,
 }: ProfileViewerProps) {
@@ -29,6 +35,7 @@ export function ProfileViewer({
   const [fullscreen, setFullscreen] = useState(false);
   const [clipboardSync, setClipboardSync] = useState(initialClipboardSync);
   const [cdpCopied, setCdpCopied] = useState(false);
+  const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
 
   useEffect(() => {
     let rfb: any = null;
@@ -233,6 +240,24 @@ export function ProfileViewer({
   }, [maximized]);
 
   useEffect(() => {
+    if (!maximized) setProfileDrawerOpen(false);
+  }, [maximized]);
+
+  useEffect(() => {
+    if (!maximized || !profileDrawerOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      setProfileDrawerOpen(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [maximized, profileDrawerOpen]);
+
+  useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
@@ -248,10 +273,35 @@ export function ProfileViewer({
     ? "fixed inset-0 z-50 bg-black flex flex-col"
     : "relative h-full flex flex-col";
 
+  const handleSelectProfile = (id: string) => {
+    if (id !== profile.id) {
+      onSelectRunningProfile(id);
+    }
+    setProfileDrawerOpen(false);
+  };
+
+  const floatingProfileButton = maximized && (
+    <button
+      onClick={() => setProfileDrawerOpen(true)}
+      className="absolute left-4 top-4 z-10 flex max-w-[calc(100vw-6rem)] items-center gap-2 rounded-md border border-border bg-surface-1/90 px-3 py-2 text-gray-200 shadow-lg transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-accent/50"
+      title={profile.name}
+      aria-label={`Current profile: ${profile.name}`}
+    >
+      <span className="h-2 w-2 flex-shrink-0 rounded-full bg-emerald-400" />
+      <span className="min-w-0 truncate text-sm font-medium">{profile.name}</span>
+      <span className="hidden flex-shrink-0 text-xs capitalize text-gray-500 sm:inline">
+        {profile.platform}
+      </span>
+      <span className="flex-shrink-0 rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-gray-400">
+        {runningProfiles.length}
+      </span>
+    </button>
+  );
+
   const floatingExitButton = maximized && (
     <button
       onClick={onExitMaximize}
-      className="absolute right-4 top-4 z-10 rounded-md border border-border bg-surface-1/90 p-2 text-gray-200 shadow-lg transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-accent/50"
+      className="absolute right-4 top-4 z-40 rounded-md border border-border bg-surface-1/90 p-2 text-gray-200 shadow-lg transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-accent/50"
       title="Exit maximized VNC"
       aria-label="Exit maximized VNC"
     >
@@ -259,10 +309,91 @@ export function ProfileViewer({
     </button>
   );
 
+  const profileDrawer = maximized && profileDrawerOpen && (
+    <>
+      <button
+        type="button"
+        className="absolute inset-0 z-20 bg-black/35"
+        onClick={() => setProfileDrawerOpen(false)}
+        aria-label="Close profile switcher"
+      />
+      <aside className="absolute inset-y-0 left-0 z-30 flex w-72 max-w-[85vw] flex-col border-r border-border bg-surface-1/95 shadow-2xl backdrop-blur">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Running Profiles
+            </h2>
+            <p className="mt-1 text-sm text-gray-300">{runningProfiles.length} running</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setProfileDrawerOpen(false)}
+            className="rounded-md p-1 text-gray-500 transition-colors hover:bg-surface-2 hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-accent/50"
+            title="Close"
+            aria-label="Close profile switcher"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {runningProfiles.map((runningProfile) => {
+            const isCurrent = runningProfile.id === profile.id;
+
+            return (
+              <button
+                key={runningProfile.id}
+                type="button"
+                onClick={() => handleSelectProfile(runningProfile.id)}
+                className={`mb-1 w-full rounded-md border px-3 py-2.5 text-left transition-colors ${
+                  isCurrent
+                    ? "border-border-hover bg-surface-3"
+                    : "border-transparent hover:bg-surface-2"
+                }`}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="h-2 w-2 flex-shrink-0 rounded-full bg-emerald-400" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-100">
+                    {runningProfile.name}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center gap-2 pl-4">
+                  <span className="text-xs capitalize text-gray-500">
+                    {runningProfile.platform}
+                  </span>
+                  {runningProfile.proxy && (
+                    <>
+                      <span className="text-xs text-gray-600">·</span>
+                      <span className="text-xs text-gray-500">Proxy</span>
+                    </>
+                  )}
+                </div>
+                {runningProfile.tags.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1 pl-4">
+                    {runningProfile.tags.map((tag) => (
+                      <span
+                        key={tag.tag}
+                        className="rounded-full bg-surface-4 px-1.5 py-0.5 text-[10px] text-gray-400"
+                        style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
+                      >
+                        {tag.tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+    </>
+  );
+
   if (error) {
     return (
       <div className={rootClassName}>
+        {floatingProfileButton}
         {floatingExitButton}
+        {profileDrawer}
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <p className="text-red-400 text-sm mb-2">Connection failed</p>
@@ -275,7 +406,9 @@ export function ProfileViewer({
 
   return (
     <div className={rootClassName}>
+      {floatingProfileButton}
       {floatingExitButton}
+      {profileDrawer}
 
       {/* Toolbar */}
       {!maximized && (

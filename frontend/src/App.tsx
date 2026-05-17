@@ -96,6 +96,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [vncMaximized, setVncMaximized] = useState(false);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
+  const runningProfiles = profiles.filter((p) => p.status === "running");
 
   useEffect(() => {
     if (view !== "view") return;
@@ -111,6 +112,15 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     const nextView = profile?.status === "running" ? "view" : "edit";
     setView(nextView);
     setVncMaximized(nextView === "view");
+  }, [profiles]);
+
+  const handleSelectRunningProfile = useCallback((id: string) => {
+    const profile = profiles.find((p) => p.id === id);
+    if (profile?.status !== "running") return;
+
+    setSelectedId(id);
+    setView("view");
+    setVncMaximized(true);
   }, [profiles]);
 
   const handleNew = useCallback(() => {
@@ -268,10 +278,13 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
           {view === "view" && selected && selected.status === "running" && (
             <ProfileViewer
               key={selected.id}
+              profile={selected}
+              runningProfiles={runningProfiles}
               profileId={selected.id}
               cdpUrl={selected.cdp_url}
               clipboardSync={selected.clipboard_sync}
               maximized={vncMaximized}
+              onSelectRunningProfile={handleSelectRunningProfile}
               onExitMaximize={() => setVncMaximized(false)}
               onDisconnect={handleVncDisconnect}
             />
