@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Lock, PanelLeftClose, PanelLeft } from "lucide-react";
 import { useProfiles } from "./hooks/useProfiles";
 import { api, setOnUnauthorized, type ProfileCreateData } from "./lib/api";
@@ -94,9 +94,13 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [view, setView] = useState<View>("empty");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [vncMaximized, setVncMaximized] = useState(false);
+  const previousRunningIdsRef = useRef<Set<string> | null>(null);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
-  const runningProfiles = profiles.filter((p) => p.status === "running");
+  const runningProfiles = useMemo(
+    () => profiles.filter((p) => p.status === "running"),
+    [profiles],
+  );
 
   useEffect(() => {
     if (view !== "view") return;
@@ -105,6 +109,26 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     setView(selected ? "edit" : "empty");
     setVncMaximized(false);
   }, [selected?.id, selected?.status, view]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const runningIds = new Set(runningProfiles.map((profile) => profile.id));
+    const previousRunningIds = previousRunningIdsRef.current;
+    previousRunningIdsRef.current = runningIds;
+
+    if (!previousRunningIds) return;
+    if (view === "view" && vncMaximized) return;
+
+    const newlyRunning = runningProfiles.find(
+      (profile) => !previousRunningIds.has(profile.id),
+    );
+    if (!newlyRunning) return;
+
+    setSelectedId(newlyRunning.id);
+    setView("view");
+    setVncMaximized(true);
+  }, [loading, runningProfiles, view, vncMaximized]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
