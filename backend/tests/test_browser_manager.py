@@ -19,6 +19,35 @@ from backend.browser_manager import (
 )
 
 
+class _FakePage:
+    def __init__(self, observed: dict):
+        self.observed = observed
+
+    async def evaluate(self, _script: str):
+        return self.observed
+
+
+class _FakeCDPSession:
+    def __init__(self, arguments: list[str] | None = None, error: Exception | None = None):
+        self.arguments = arguments
+        self.error = error
+
+    async def send(self, _method: str):
+        if self.error:
+            raise self.error
+        return {"arguments": self.arguments or []}
+
+
+class _FakeContext:
+    def __init__(self, observed: dict, arguments: list[str] | None = None, cdp_error: Exception | None = None):
+        self.pages = [_FakePage(observed)]
+        self.arguments = arguments
+        self.cdp_error = cdp_error
+
+    async def new_cdp_session(self, _page: _FakePage):
+        return _FakeCDPSession(self.arguments, self.cdp_error)
+
+
 # ── _normalize_proxy ─────────────────────────────────────────────────────────
 
 
@@ -174,6 +203,59 @@ def test_launch_args_none_no_effect():
     base_count = len(args)
     args += profile.get("launch_args") or []
     assert len(args) == base_count
+
+
+# ── stealth integrity ─────────────────────────────────────────────────────────
+
+
+def _observed_browser_state(**overrides):
+    state = {
+        "webdriver": False,
+        "language": "en-US",
+        "languages": ["en-US"],
+        "timezone": "America/New_York",
+        "screen": {"width": 1366, "height": 768, "availWidth": 1366, "availHeight": 720},
+        "inner": {"width": 1366, "height": 635},
+        "outer": {"width": 1366, "height": 720},
+    }
+    state.update(overrides)
+    return state
+
+
+@pytest.mark.asyncio
+async def test_stealth_integrity_passes_without_automation_args():
+    mgr = BrowserManager()
+    result = await mgr._check_stealth_integrity(
+        context=_FakeContext(_observed_browser_state(), arguments=["--disable-infobars"]),
+        profile={"locale": "en-US", "timezone": "America/New_York", "screen_width": 1366, "screen_height": 768},
+        requested_args=["--disable-infobars"],
+    )
+    assert result["passed"] is True
+    assert result["errors"] == []
+
+
+@pytest.mark.asyncio
+async def test_stealth_integrity_fails_on_enable_automation_arg():
+    mgr = BrowserManager()
+    result = await mgr._check_stealth_integrity(
+        context=_FakeContext(_observed_browser_state(), arguments=["--enable-automation"]),
+        profile={"locale": "en-US", "timezone": "America/New_York", "screen_width": 1366, "screen_height": 768},
+        requested_args=[],
+    )
+    assert result["passed"] is False
+    assert any("--enable-automation" in error for error in result["errors"])
+
+
+@pytest.mark.asyncio
+async def test_stealth_integrity_fails_on_webdriver_true():
+    mgr = BrowserManager()
+    result = await mgr._check_stealth_integrity(
+        context=_FakeContext(_observed_browser_state(webdriver=True), arguments=[]),
+        profile={"locale": "en-US", "timezone": "America/New_York", "screen_width": 1366, "screen_height": 768},
+        requested_args=[],
+    )
+    assert result["passed"] is False
+    assert any("navigator.webdriver" in error for error in result["errors"])
 
 
 # ── _allocate_cdp_port ───────────────────────────────────────────────────────

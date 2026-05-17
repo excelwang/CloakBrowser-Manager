@@ -103,6 +103,7 @@ class ProfileResponse(BaseModel):
     status: str = "stopped"  # "running" | "stopped"
     vnc_ws_port: int | None = None
     cdp_url: str | None = None
+    stealth_integrity: dict[str, object] | None = None
 
 
 class LaunchResponse(BaseModel):
@@ -111,6 +112,7 @@ class LaunchResponse(BaseModel):
     vnc_ws_port: int
     display: str
     cdp_url: str | None = None
+    stealth_integrity: dict[str, object] | None = None
 
 
 class StatusResponse(BaseModel):
@@ -124,6 +126,7 @@ class ProfileStatusResponse(BaseModel):
     vnc_ws_port: int | None = None
     display: str | None = None
     cdp_url: str | None = None
+    stealth_integrity: dict[str, object] | None = None
 
 
 class ClipboardRequest(BaseModel):

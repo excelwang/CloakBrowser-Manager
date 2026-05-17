@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
+import importlib.metadata
 import json
 import logging
 import os
 import socket
 import time
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import Any
 
@@ -153,6 +156,11 @@ class RunningProfile:
     display: int
     ws_port: int
     cdp_port: int
+    stealth_integrity: dict[str, Any] = field(default_factory=dict)
+
+
+class StealthIntegrityError(RuntimeError):
+    """Raised when a launched browser exposes automation indicators."""
 
 
 class BrowserManager:
@@ -175,6 +183,7 @@ class BrowserManager:
 
         display, ws_port = await self.vnc.allocate()
 
+        context = None
         try:
             cdp_port = self._allocate_cdp_port()
         except ValueError:
@@ -233,6 +242,19 @@ class BrowserManager:
                 env={**os.environ, "DISPLAY": f":{display}"},
             )
 
+            stealth_integrity = await self._check_stealth_integrity(
+                context=context,
+                profile=profile,
+                requested_args=extra_args,
+            )
+            if not stealth_integrity.get("passed"):
+                await context.close()
+                context = None
+                raise StealthIntegrityError(
+                    "CLOAKBROWSER_STEALTH_INTEGRITY_FAILED: "
+                    + "; ".join(stealth_integrity.get("errors") or ["unknown stealth integrity failure"])
+                )
+
             # Inject clipboard listener: captures copied text on every page
             # so the GET /clipboard endpoint can read it via page.evaluate()
             _clipboard_init_js = """
@@ -262,6 +284,7 @@ class BrowserManager:
                 display=display,
                 ws_port=ws_port,
                 cdp_port=cdp_port,
+                stealth_integrity=stealth_integrity,
             )
 
             # Auto-cleanup if browser crashes or user closes Chrome via VNC
@@ -283,6 +306,11 @@ class BrowserManager:
         except BaseException:
             async with self._lock:
                 self._launching.discard(profile_id)
+            if context is not None:
+                try:
+                    await context.close()
+                except Exception as exc:
+                    logger.warning("Error closing failed launch context for %s: %s", profile_id, exc)
             await self.vnc.stop_vnc(display)
             raise
 
@@ -294,6 +322,93 @@ class BrowserManager:
         if running:
             logger.info("Browser closed for profile %s, cleaning up", profile_id)
             await self.vnc.stop_vnc(running.display)
+
+    async def _check_stealth_integrity(
+        self,
+        *,
+        context: Any,
+        profile: dict[str, Any],
+        requested_args: list[str],
+    ) -> dict[str, Any]:
+        """Verify that the launched CloakBrowser surface did not expose automation signals."""
+        errors: list[str] = []
+        warnings: list[str] = []
+        observed: dict[str, Any] = {}
+        command_line: dict[str, Any] = {"available": False, "arguments": []}
+        cloakbrowser_version: str | None
+        try:
+            cloakbrowser_version = importlib.metadata.version("cloakbrowser")
+        except importlib.metadata.PackageNotFoundError:
+            cloakbrowser_version = None
+            warnings.append("cloakbrowser package version unavailable")
+
+        page = None
+        try:
+            page = context.pages[0] if context.pages else await context.new_page()
+        except Exception as exc:
+            errors.append(f"unable to access a browser page for stealth check: {exc}")
+
+        if page is not None:
+            try:
+                observed = await page.evaluate("""() => ({
+                    webdriver: navigator.webdriver,
+                    userAgent: navigator.userAgent,
+                    language: navigator.language,
+                    languages: Array.from(navigator.languages || []),
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    screen: {
+                        width: window.screen.width,
+                        height: window.screen.height,
+                        availWidth: window.screen.availWidth,
+                        availHeight: window.screen.availHeight
+                    },
+                    inner: { width: window.innerWidth, height: window.innerHeight },
+                    outer: { width: window.outerWidth, height: window.outerHeight },
+                    devicePixelRatio: window.devicePixelRatio
+                })""")
+            except Exception as exc:
+                errors.append(f"unable to evaluate browser stealth JavaScript: {exc}")
+
+            try:
+                cdp_session = await context.new_cdp_session(page)
+                cdp_command_line = await cdp_session.send("Browser.getBrowserCommandLine")
+                args = cdp_command_line.get("arguments") or []
+                command_line = {"available": True, "arguments": args}
+                if any(str(arg) == "--enable-automation" or str(arg).startswith("--enable-automation=") for arg in args):
+                    errors.append("browser command line contains --enable-automation")
+            except Exception as exc:
+                command_line = {"available": False, "error": str(exc)}
+
+        webdriver = observed.get("webdriver")
+        if webdriver is not False:
+            errors.append(f"navigator.webdriver expected false, got {webdriver!r}")
+
+        if not profile.get("geoip"):
+            expected_locale = profile.get("locale")
+            if expected_locale and observed.get("language") != expected_locale:
+                errors.append(f"navigator.language expected {expected_locale!r}, got {observed.get('language')!r}")
+            expected_timezone = profile.get("timezone")
+            if expected_timezone and observed.get("timezone") != expected_timezone:
+                errors.append(f"timezone expected {expected_timezone!r}, got {observed.get('timezone')!r}")
+
+        screen = observed.get("screen") if isinstance(observed.get("screen"), dict) else {}
+        expected_screen_width = profile.get("screen_width")
+        expected_screen_height = profile.get("screen_height")
+        if expected_screen_width and screen.get("width") != expected_screen_width:
+            errors.append(f"screen.width expected {expected_screen_width!r}, got {screen.get('width')!r}")
+        if expected_screen_height and screen.get("height") != expected_screen_height:
+            errors.append(f"screen.height expected {expected_screen_height!r}, got {screen.get('height')!r}")
+
+        return {
+            "passed": not errors,
+            "checked_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+            "cloakbrowser_version": cloakbrowser_version,
+            "errors": errors,
+            "warnings": warnings,
+            "observed": observed,
+            "command_line": command_line,
+            "requested_args": requested_args,
+        }
 
     async def stop(self, profile_id: str):
         """Stop a running browser instance."""
@@ -317,13 +432,17 @@ class BrowserManager:
         """Get running status for a profile."""
         running = self.running.get(profile_id)
         if running:
+            stealth_integrity = getattr(running, "stealth_integrity", None)
+            if not isinstance(stealth_integrity, dict):
+                stealth_integrity = None
             return {
                 "status": "running",
                 "vnc_ws_port": running.ws_port,
                 "display": f":{running.display}",
                 "cdp_url": f"/api/profiles/{profile_id}/cdp",
+                "stealth_integrity": stealth_integrity,
             }
-        return {"status": "stopped", "vnc_ws_port": None, "display": None, "cdp_url": None}
+        return {"status": "stopped", "vnc_ws_port": None, "display": None, "cdp_url": None, "stealth_integrity": None}
 
     async def cleanup_all(self):
         """Stop all running profiles. Called on shutdown."""
