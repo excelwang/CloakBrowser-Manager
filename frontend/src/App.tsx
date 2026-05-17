@@ -93,18 +93,30 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("empty");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [vncMaximized, setVncMaximized] = useState(false);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (view !== "view") return;
+    if (selected?.status === "running") return;
+
+    setView(selected ? "edit" : "empty");
+    setVncMaximized(false);
+  }, [selected?.id, selected?.status, view]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
     const profile = profiles.find((p) => p.id === id);
-    setView(profile?.status === "running" ? "view" : "edit");
+    const nextView = profile?.status === "running" ? "view" : "edit";
+    setView(nextView);
+    setVncMaximized(nextView === "view");
   }, [profiles]);
 
   const handleNew = useCallback(() => {
     setSelectedId(null);
     setView("create");
+    setVncMaximized(false);
   }, []);
 
   const handleCreate = useCallback(async (data: ProfileCreateData) => {
@@ -112,6 +124,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     if (profile) {
       setSelectedId(profile.id);
       setView("edit");
+      setVncMaximized(false);
     }
   }, [create]);
 
@@ -125,22 +138,28 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     await remove(selectedId);
     setSelectedId(null);
     setView("empty");
+    setVncMaximized(false);
   }, [selectedId, remove]);
 
   const handleLaunch = useCallback(async () => {
     if (!selectedId) return;
     const result = await launch(selectedId);
-    if (result) setView("view");
+    if (result) {
+      setView("view");
+      setVncMaximized(true);
+    }
   }, [selectedId, launch]);
 
   const handleStop = useCallback(async () => {
     if (!selectedId) return;
     await stop(selectedId);
     setView("edit");
+    setVncMaximized(false);
   }, [selectedId, stop]);
 
   const handleVncDisconnect = useCallback(() => {
     setView("edit");
+    setVncMaximized(false);
   }, []);
 
   if (loading) {
@@ -226,7 +245,10 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             <ProfileForm
               profile={null}
               onSave={handleCreate}
-              onCancel={() => setView("empty")}
+              onCancel={() => {
+                setView("empty");
+                setVncMaximized(false);
+              }}
             />
           )}
 
@@ -238,6 +260,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               onCancel={() => {
                 setSelectedId(null);
                 setView("empty");
+                setVncMaximized(false);
               }}
             />
           )}
@@ -248,6 +271,8 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               profileId={selected.id}
               cdpUrl={selected.cdp_url}
               clipboardSync={selected.clipboard_sync}
+              maximized={vncMaximized}
+              onExitMaximize={() => setVncMaximized(false)}
               onDisconnect={handleVncDisconnect}
             />
           )}

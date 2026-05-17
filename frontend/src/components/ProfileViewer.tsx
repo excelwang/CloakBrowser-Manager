@@ -6,13 +6,22 @@ interface ProfileViewerProps {
   profileId: string;
   cdpUrl: string | null;
   clipboardSync: boolean;
+  maximized: boolean;
+  onExitMaximize: () => void;
   onDisconnect: () => void;
 }
 
 // X11 keysym for V key (Ctrl is already held in VNC by the time we intercept)
 const XK_v = 0x0076;
 
-export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboardSync, onDisconnect }: ProfileViewerProps) {
+export function ProfileViewer({
+  profileId,
+  cdpUrl,
+  clipboardSync: initialClipboardSync,
+  maximized,
+  onExitMaximize,
+  onDisconnect,
+}: ProfileViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rfbRef = useRef<any>(null);
   const [connected, setConnected] = useState(false);
@@ -217,6 +226,13 @@ export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboa
   }, []);
 
   useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [maximized]);
+
+  useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
@@ -228,60 +244,82 @@ export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboa
     return () => container.removeEventListener("wheel", handleWheel);
   }, []);
 
+  const rootClassName = maximized
+    ? "fixed inset-0 z-50 bg-black flex flex-col"
+    : "relative h-full flex flex-col";
+
+  const floatingExitButton = maximized && (
+    <button
+      onClick={onExitMaximize}
+      className="absolute right-4 top-4 z-10 rounded-md border border-border bg-surface-1/90 p-2 text-gray-200 shadow-lg transition-colors hover:bg-surface-2 focus:outline-none focus:ring-2 focus:ring-accent/50"
+      title="Exit maximized VNC"
+      aria-label="Exit maximized VNC"
+    >
+      <Minimize2 className="h-4 w-4" />
+    </button>
+  );
+
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <p className="text-red-400 text-sm mb-2">Connection failed</p>
-          <p className="text-gray-500 text-xs">{error}</p>
+      <div className={rootClassName}>
+        {floatingExitButton}
+        <div className="flex flex-1 items-center justify-center">
+          <div className="text-center">
+            <p className="text-red-400 text-sm mb-2">Connection failed</p>
+            <p className="text-gray-500 text-xs">{error}</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative h-full flex flex-col">
+    <div className={rootClassName}>
+      {floatingExitButton}
+
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-surface-1 border-b border-border">
-        <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-yellow-400 animate-pulse"}`} />
-          <span className="text-xs text-gray-400">
-            {connected ? "Connected" : "Connecting..."}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {cdpUrl && (
+      {!maximized && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-surface-1 border-b border-border">
+          <div className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-yellow-400 animate-pulse"}`} />
+            <span className="text-xs text-gray-400">
+              {connected ? "Connected" : "Connecting..."}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            {cdpUrl && (
+              <button
+                onClick={() => {
+                  const base = `${window.location.protocol}//${window.location.host}${cdpUrl}`;
+                  navigator.clipboard?.writeText(base).then(() => {
+                    setCdpCopied(true);
+                    setTimeout(() => setCdpCopied(false), 2000);
+                  }).catch((err) => console.warn("[cdp] copy failed:", err));
+                }}
+                className={`p-1 ${cdpCopied ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}
+                title={cdpCopied ? "Copied!" : "Copy CDP endpoint URL"}
+              >
+                <Code2 className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button
-              onClick={() => {
-                const base = `${window.location.protocol}//${window.location.host}${cdpUrl}`;
-                navigator.clipboard?.writeText(base).then(() => {
-                  setCdpCopied(true);
-                  setTimeout(() => setCdpCopied(false), 2000);
-                }).catch((err) => console.warn("[cdp] copy failed:", err));
-              }}
-              className={`p-1 ${cdpCopied ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}
-              title={cdpCopied ? "Copied!" : "Copy CDP endpoint URL"}
+              onClick={() => { console.log("[clipboard] toggle:", !clipboardSync); setClipboardSync(!clipboardSync); }}
+              className={`p-1 ${clipboardSync ? "text-accent" : "text-gray-500 hover:text-gray-300"}`}
+              title={clipboardSync ? "Disable clipboard sync" : "Enable clipboard sync"}
+              disabled={!connected}
             >
-              <Code2 className="h-3.5 w-3.5" />
+              <ClipboardCopy className="h-3.5 w-3.5" />
             </button>
-          )}
-          <button
-            onClick={() => { console.log("[clipboard] toggle:", !clipboardSync); setClipboardSync(!clipboardSync); }}
-            className={`p-1 ${clipboardSync ? "text-accent" : "text-gray-500 hover:text-gray-300"}`}
-            title={clipboardSync ? "Disable clipboard sync" : "Enable clipboard sync"}
-            disabled={!connected}
-          >
-            <ClipboardCopy className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={toggleFullscreen}
-            className="text-gray-500 hover:text-gray-300 p-1"
-            title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-          >
-            {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-          </button>
+            <button
+              onClick={toggleFullscreen}
+              className="text-gray-500 hover:text-gray-300 p-1"
+              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            >
+              {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* VNC canvas container */}
       <div
