@@ -7,6 +7,7 @@ import logging
 import shutil
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 
 logger = logging.getLogger("cloakbrowser.manager.vnc")
 
@@ -60,6 +61,7 @@ class VNCManager:
             "-SecurityTypes", "None",
             "-DisableBasicAuth",
             "-interface", "127.0.0.1",  # internal only, proxied by FastAPI
+            "-publicIP", "127.0.0.1",  # avoid slow ICE public-IP probing
             "-AlwaysShared",
             "-httpd", httpd_dir,
         ]
@@ -75,17 +77,45 @@ class VNCManager:
         )
         log_file.close()  # Popen inherited the fd, parent doesn't need it
 
-        # Wait a moment for Xvnc to initialize
-        await asyncio.sleep(0.5)
+        display_name = f":{display}"
+        display_socket = Path(f"/tmp/.X11-unix/X{display}")
+        last_error = ""
+        for _ in range(100):
+            if proc.poll() is not None:
+                break
+            if display_socket.exists():
+                try:
+                    ready = await asyncio.to_thread(
+                        subprocess.run,
+                        ["xdpyinfo", "-display", display_name],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=1,
+                        check=False,
+                    )
+                    if ready.returncode == 0:
+                        last_error = ""
+                        break
+                    last_error = ready.stderr.strip()
+                except FileNotFoundError:
+                    last_error = "xdpyinfo is not installed"
+                    break
+                except Exception as exc:
+                    last_error = str(exc)
+            await asyncio.sleep(0.1)
+        else:
+            last_error = f"timed out waiting for X display {display_name}"
 
-        if proc.poll() is not None:
+        if proc.poll() is not None or last_error:
             try:
                 with open(log_path) as f:
                     err = f.read()
             except Exception as exc:
                 logger.debug("Failed to read Xvnc log %s: %s", log_path, exc)
                 err = ""
-            raise RuntimeError(f"Xvnc failed to start on :{display}: {err}")
+            detail = last_error or err
+            raise RuntimeError(f"Xvnc failed to start on :{display}: {detail}")
 
         async with self._lock:
             if display in self._allocated:

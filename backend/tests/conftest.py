@@ -11,9 +11,8 @@ import pytest
 
 # ---------------------------------------------------------------------------
 # Mock cloakbrowser BEFORE any backend module is imported.
-# browser_manager.py does `from cloakbrowser import launch_persistent_context_async`
-# at module level, and main.py imports BrowserManager which triggers it.
-# main.py:381 also does `from cloakbrowser.config import CHROMIUM_VERSION`.
+# main.py imports cloakbrowser.config at startup; direct browser launch internals
+# are imported lazily by BrowserManager and covered with explicit fakes in tests.
 # ---------------------------------------------------------------------------
 
 _mock_cloakbrowser = types.ModuleType("cloakbrowser")
