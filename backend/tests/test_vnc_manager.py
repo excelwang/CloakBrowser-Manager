@@ -96,7 +96,14 @@ def test_get_status_stopped():
     from backend.browser_manager import BrowserManager
     mgr = BrowserManager()
     status = mgr.get_status("nonexistent")
-    assert status == {"status": "stopped", "vnc_ws_port": None, "display": None, "cdp_url": None, "stealth_integrity": None}
+    assert status == {
+        "status": "stopped",
+        "vnc_ws_port": None,
+        "display": None,
+        "cdp_url": None,
+        "stealth_integrity": None,
+        "launched_at": None,
+    }
 
 
 def test_get_status_running():
@@ -109,6 +116,7 @@ def test_get_status_running():
         display=100,
         ws_port=6100,
         cdp_port=5100,
+        launched_at="2026-01-01T00:00:00Z",
         stealth_integrity={"passed": True},
     )
     status = mgr.get_status("abc")
@@ -118,4 +126,5 @@ def test_get_status_running():
         "display": ":100",
         "cdp_url": "/api/profiles/abc/cdp",
         "stealth_integrity": {"passed": True},
+        "launched_at": "2026-01-01T00:00:00Z",
     }

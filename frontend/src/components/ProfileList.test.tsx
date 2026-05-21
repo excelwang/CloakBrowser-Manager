@@ -7,6 +7,7 @@ function makeProfile(
   id: string,
   name: string,
   status: Profile["status"],
+  launchedAt: string | null = null,
 ): Profile {
   return {
     id,
@@ -38,18 +39,19 @@ function makeProfile(
     status,
     vnc_ws_port: status === "running" ? 6100 : null,
     cdp_url: status === "running" ? `/api/profiles/${id}/cdp` : null,
+    launched_at: launchedAt,
   };
 }
 
 describe("ProfileList", () => {
-  it("sorts running profiles first, then sorts each group by name", () => {
+  it("sorts running profiles first by newest launch, then stopped profiles by name", () => {
     render(
       <ProfileList
         profiles={[
           makeProfile("stopped-delta", "delta", "stopped"),
-          makeProfile("running-bravo", "bravo", "running"),
+          makeProfile("running-bravo", "bravo", "running", "2026-01-01T01:00:00Z"),
           makeProfile("stopped-charlie", "Charlie", "stopped"),
-          makeProfile("running-alpha", "Alpha", "running"),
+          makeProfile("running-alpha", "Alpha", "running", "2026-01-01T00:00:00Z"),
         ]}
         selectedId={null}
         onSelect={vi.fn()}
@@ -61,6 +63,6 @@ describe("ProfileList", () => {
       .getAllByText(/^(Alpha|bravo|Charlie|delta)$/)
       .map((node) => node.textContent);
 
-    expect(renderedNames).toEqual(["Alpha", "bravo", "Charlie", "delta"]);
+    expect(renderedNames).toEqual(["bravo", "Alpha", "Charlie", "delta"]);
   });
 });

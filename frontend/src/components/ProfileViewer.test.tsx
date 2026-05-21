@@ -52,6 +52,7 @@ const profile: Profile = {
   status: "running",
   vnc_ws_port: 6100,
   cdp_url: "/api/profiles/profile-1/cdp",
+  launched_at: "2026-01-01T00:00:00Z",
 };
 
 function renderViewer(overrides: Partial<Parameters<typeof ProfileViewer>[0]> = {}) {

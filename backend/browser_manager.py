@@ -155,6 +155,11 @@ class RunningProfile:
     display: int
     ws_port: int
     cdp_port: int
+    launched_at: str = field(
+        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
     browser: Any | None = None  # Playwright Browser CDP session
     playwright: Any | None = None  # Playwright driver instance
     process: asyncio.subprocess.Process | None = None
@@ -1225,14 +1230,25 @@ class BrowserManager:
             stealth_integrity = getattr(running, "stealth_integrity", None)
             if not isinstance(stealth_integrity, dict):
                 stealth_integrity = None
+            launched_at = getattr(running, "launched_at", None)
+            if not isinstance(launched_at, str):
+                launched_at = None
             return {
                 "status": "running",
                 "vnc_ws_port": running.ws_port,
                 "display": f":{running.display}",
                 "cdp_url": f"/api/profiles/{profile_id}/cdp",
                 "stealth_integrity": stealth_integrity,
+                "launched_at": launched_at,
             }
-        return {"status": "stopped", "vnc_ws_port": None, "display": None, "cdp_url": None, "stealth_integrity": None}
+        return {
+            "status": "stopped",
+            "vnc_ws_port": None,
+            "display": None,
+            "cdp_url": None,
+            "stealth_integrity": None,
+            "launched_at": None,
+        }
 
     async def cleanup_all(self):
         """Stop all running profiles. Called on shutdown."""

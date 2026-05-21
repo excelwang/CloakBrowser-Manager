@@ -150,8 +150,10 @@ def test_launch_response_with_cdp_url():
     r = LaunchResponse(
         profile_id="abc", vnc_ws_port=6100, display=":100",
         cdp_url="/api/profiles/abc/cdp",
+        launched_at="2026-01-01T00:00:00Z",
     )
     assert r.cdp_url == "/api/profiles/abc/cdp"
+    assert r.launched_at == "2026-01-01T00:00:00Z"
 
 
 def test_launch_response_cdp_url_default_none():
@@ -166,8 +168,10 @@ def test_profile_status_response_cdp_url():
     r = ProfileStatusResponse(
         status="running", vnc_ws_port=6100, display=":100",
         cdp_url="/api/profiles/abc/cdp",
+        launched_at="2026-01-01T00:00:00Z",
     )
     assert r.cdp_url == "/api/profiles/abc/cdp"
+    assert r.launched_at == "2026-01-01T00:00:00Z"
 
 
 def test_profile_status_response_cdp_url_stopped():
@@ -184,8 +188,10 @@ def test_profile_response_cdp_url():
         user_data_dir="/data/profiles/abc",
         created_at="2026-01-01T00:00:00", updated_at="2026-01-01T00:00:00",
         status="running", cdp_url="/api/profiles/abc/cdp",
+        launched_at="2026-01-01T00:00:00Z",
     )
     assert r.cdp_url == "/api/profiles/abc/cdp"
+    assert r.launched_at == "2026-01-01T00:00:00Z"
 
 
 def test_profile_response_cdp_url_default_none():

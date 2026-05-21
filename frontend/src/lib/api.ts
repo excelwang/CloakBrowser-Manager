@@ -32,6 +32,7 @@ export interface Profile {
   status: "running" | "stopped";
   vnc_ws_port: number | null;
   cdp_url: string | null;
+  launched_at: string | null;
 }
 
 export interface ProfileCreateData {
@@ -65,6 +66,7 @@ export interface LaunchResult {
   vnc_ws_port: number;
   display: string;
   cdp_url: string | null;
+  launched_at: string | null;
 }
 
 export interface SystemStatus {

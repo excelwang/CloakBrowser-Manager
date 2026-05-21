@@ -123,6 +123,7 @@ def test_get_profile_status_stopped(app_client: TestClient):
     resp = app_client.get(f"/api/profiles/{pid}/status")
     assert resp.status_code == 200
     assert resp.json()["status"] == "stopped"
+    assert resp.json()["launched_at"] is None
 
 
 def test_get_profile_status_not_found(app_client: TestClient):
@@ -355,12 +356,14 @@ def test_running_profile_has_cdp_url(app_client: TestClient):
     mock_running.ws_port = 6100
     mock_running.cdp_port = 5100
     mock_running.profile_id = pid
+    mock_running.launched_at = "2026-01-01T00:00:00Z"
     main.browser_mgr.running[pid] = mock_running
 
     resp = app_client.get(f"/api/profiles/{pid}")
     data = resp.json()
     assert data["status"] == "running"
     assert data["cdp_url"] == f"/api/profiles/{pid}/cdp"
+    assert data["launched_at"] == "2026-01-01T00:00:00Z"
 
     # Cleanup
     main.browser_mgr.running.pop(pid, None)

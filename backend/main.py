@@ -444,6 +444,7 @@ async def list_profiles():
         p["status"] = status["status"]
         p["vnc_ws_port"] = status["vnc_ws_port"]
         p["cdp_url"] = status["cdp_url"]
+        p["launched_at"] = status["launched_at"]
         p["stealth_integrity"] = status["stealth_integrity"]
         p["tags"] = [TagResponse(**t) for t in p.get("tags", [])]
         result.append(ProfileResponse(**p))
@@ -463,6 +464,7 @@ async def create_profile(req: ProfileCreate):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["cdp_url"] = status["cdp_url"]
+    profile["launched_at"] = status["launched_at"]
     profile["stealth_integrity"] = status["stealth_integrity"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
@@ -477,6 +479,7 @@ async def get_profile(profile_id: str):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["cdp_url"] = status["cdp_url"]
+    profile["launched_at"] = status["launched_at"]
     profile["stealth_integrity"] = status["stealth_integrity"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
@@ -496,6 +499,7 @@ async def update_profile(profile_id: str, req: ProfileUpdate):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["cdp_url"] = status["cdp_url"]
+    profile["launched_at"] = status["launched_at"]
     profile["stealth_integrity"] = status["stealth_integrity"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
@@ -551,6 +555,7 @@ async def launch_profile(profile_id: str):
         vnc_ws_port=running.ws_port,
         display=f":{running.display}",
         cdp_url=f"/api/profiles/{profile_id}/cdp",
+        launched_at=running.launched_at,
         stealth_integrity=running.stealth_integrity,
     )
 

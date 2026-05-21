@@ -22,6 +22,12 @@ export function ProfileList({ profiles, selectedId, onSelect, onNew }: ProfileLi
           (a.status === "running" ? 0 : 1) - (b.status === "running" ? 0 : 1);
         if (statusOrder !== 0) return statusOrder;
 
+        if (a.status === "running" && b.status === "running") {
+          const launchOrder =
+            Date.parse(b.launched_at ?? "") - Date.parse(a.launched_at ?? "");
+          if (!Number.isNaN(launchOrder) && launchOrder !== 0) return launchOrder;
+        }
+
         const nameOrder = a.name.localeCompare(b.name, undefined, {
           sensitivity: "base",
         });
