@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ClipboardCopy, Code2, Maximize2, Minimize2, X } from "lucide-react";
+import { ClipboardCopy, Code2, Fullscreen, Maximize2, Minimize2, X } from "lucide-react";
 import { api, type Profile } from "../lib/api";
 
 interface ProfileViewerProps {
@@ -10,6 +10,7 @@ interface ProfileViewerProps {
   clipboardSync: boolean;
   maximized: boolean;
   onSelectRunningProfile: (id: string) => void;
+  onEnterMaximize: () => void;
   onExitMaximize: () => void;
   onDisconnect: () => void;
 }
@@ -25,6 +26,7 @@ export function ProfileViewer({
   clipboardSync: initialClipboardSync,
   maximized,
   onSelectRunningProfile,
+  onEnterMaximize,
   onExitMaximize,
   onDisconnect,
 }: ProfileViewerProps) {
@@ -446,9 +448,18 @@ export function ProfileViewer({
             <button
               onClick={toggleFullscreen}
               className="text-gray-500 hover:text-gray-300 p-1"
-              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              title={fullscreen ? "Exit browser fullscreen" : "Browser fullscreen"}
+              aria-label={fullscreen ? "Exit browser fullscreen" : "Enter browser fullscreen"}
             >
-              {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Fullscreen className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              onClick={onEnterMaximize}
+              className="text-gray-500 hover:text-gray-300 p-1"
+              title="Maximize VNC"
+              aria-label="Maximize VNC"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>

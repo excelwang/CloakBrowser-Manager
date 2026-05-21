@@ -1,5 +1,5 @@
 import { Plus, Search, Monitor } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Profile } from "../lib/api";
 import { StatusIndicator } from "./StatusIndicator";
 
@@ -13,9 +13,23 @@ interface ProfileListProps {
 export function ProfileList({ profiles, selectedId, onSelect, onNew }: ProfileListProps) {
   const [search, setSearch] = useState("");
 
-  const filtered = profiles.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = useMemo(() => {
+    const query = search.toLowerCase();
+    return profiles
+      .filter((p) => p.name.toLowerCase().includes(query))
+      .sort((a, b) => {
+        const statusOrder =
+          (a.status === "running" ? 0 : 1) - (b.status === "running" ? 0 : 1);
+        if (statusOrder !== 0) return statusOrder;
+
+        const nameOrder = a.name.localeCompare(b.name, undefined, {
+          sensitivity: "base",
+        });
+        if (nameOrder !== 0) return nameOrder;
+
+        return a.id.localeCompare(b.id);
+      });
+  }, [profiles, search]);
 
   const runningCount = profiles.filter((p) => p.status === "running").length;
 

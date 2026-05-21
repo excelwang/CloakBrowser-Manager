@@ -127,7 +127,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
 
     setSelectedId(newlyRunning.id);
     setView("view");
-    setVncMaximized(true);
+    setVncMaximized(false);
   }, [loading, runningProfiles, view, vncMaximized]);
 
   const handleSelect = useCallback((id: string) => {
@@ -135,7 +135,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     const profile = profiles.find((p) => p.id === id);
     const nextView = profile?.status === "running" ? "view" : "edit";
     setView(nextView);
-    setVncMaximized(nextView === "view");
+    setVncMaximized(false);
   }, [profiles]);
 
   const handleSelectRunningProfile = useCallback((id: string) => {
@@ -144,7 +144,6 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
 
     setSelectedId(id);
     setView("view");
-    setVncMaximized(true);
   }, [profiles]);
 
   const handleNew = useCallback(() => {
@@ -180,7 +179,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     const result = await launch(selectedId);
     if (result) {
       setView("view");
-      setVncMaximized(true);
+      setVncMaximized(false);
     }
   }, [selectedId, launch]);
 
@@ -309,6 +308,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               clipboardSync={selected.clipboard_sync}
               maximized={vncMaximized}
               onSelectRunningProfile={handleSelectRunningProfile}
+              onEnterMaximize={() => setVncMaximized(true)}
               onExitMaximize={() => setVncMaximized(false)}
               onDisconnect={handleVncDisconnect}
             />
