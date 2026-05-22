@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Profile } from "./lib/api";
-import { getLongestRunningProfile } from "./App";
+import { getLongestRunningProfile, shouldOpenOnlyRunningProfile } from "./App";
 
 function makeProfile(
   id: string,
@@ -60,5 +60,19 @@ describe("getLongestRunningProfile", () => {
     ], "current");
 
     expect(result?.id).toBe("fallback");
+  });
+});
+
+describe("shouldOpenOnlyRunningProfile", () => {
+  it("opens the only running profile on initial observation", () => {
+    expect(shouldOpenOnlyRunningProfile(null, 1)).toBe(true);
+  });
+
+  it("opens a newly running profile when the previous running count was zero", () => {
+    expect(shouldOpenOnlyRunningProfile(0, 1)).toBe(true);
+  });
+
+  it("does not switch when another profile was already running", () => {
+    expect(shouldOpenOnlyRunningProfile(1, 2)).toBe(false);
   });
 });

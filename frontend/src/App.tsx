@@ -36,6 +36,14 @@ export function getLongestRunningProfile(
     })[0] ?? null;
 }
 
+export function shouldOpenOnlyRunningProfile(
+  previousRunningCount: number | null,
+  runningCount: number,
+) {
+  return (previousRunningCount === null || previousRunningCount === 0)
+    && runningCount === 1;
+}
+
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [authRequired, setAuthRequired] = useState(false);
@@ -146,7 +154,9 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     const previousRunningCount = previousRunningCountRef.current;
     previousRunningCountRef.current = runningProfiles.length;
 
-    if (previousRunningCount !== 0 || runningProfiles.length !== 1) return;
+    if (!shouldOpenOnlyRunningProfile(previousRunningCount, runningProfiles.length)) {
+      return;
+    }
 
     const onlyRunningProfile = runningProfiles[0];
     if (!onlyRunningProfile) return;
