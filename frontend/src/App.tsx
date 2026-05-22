@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Lock, PanelLeftClose, PanelLeft } from "lucide-react";
 import { useProfiles } from "./hooks/useProfiles";
-import { api, setOnUnauthorized, type ProfileCreateData } from "./lib/api";
+import { api, setOnUnauthorized, type Profile, type ProfileCreateData } from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileForm } from "./components/ProfileForm";
 import { ProfileViewer } from "./components/ProfileViewer";
@@ -11,6 +11,30 @@ import { LoginPage } from "./components/LoginPage";
 
 type AuthState = "checking" | "required" | "ok" | "error";
 type View = "empty" | "create" | "edit" | "view";
+
+function launchTime(profile: Profile) {
+  const timestamp = Date.parse(profile.launched_at ?? "");
+  return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
+}
+
+export function getLongestRunningProfile(
+  profiles: Profile[],
+  excludeId?: string | null,
+) {
+  return [...profiles]
+    .filter((profile) => profile.status === "running" && profile.id !== excludeId)
+    .sort((a, b) => {
+      const timeOrder = launchTime(a) - launchTime(b);
+      if (timeOrder !== 0) return timeOrder;
+
+      const nameOrder = a.name.localeCompare(b.name, undefined, {
+        sensitivity: "base",
+      });
+      if (nameOrder !== 0) return nameOrder;
+
+      return a.id.localeCompare(b.id);
+    })[0] ?? null;
+}
 
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>("checking");
@@ -94,6 +118,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [view, setView] = useState<View>("empty");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [vncMaximized, setVncMaximized] = useState(false);
+  const previousRunningCountRef = useRef<number | null>(null);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const runningProfiles = useMemo(
@@ -105,9 +130,31 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     if (view !== "view") return;
     if (selected?.status === "running") return;
 
-    setView(selected ? "edit" : "empty");
+    const fallbackProfile = getLongestRunningProfile(profiles, selectedId);
+    if (fallbackProfile) {
+      setSelectedId(fallbackProfile.id);
+      setView("view");
+    } else {
+      setView(selected ? "edit" : "empty");
+    }
     setVncMaximized(false);
-  }, [selected?.id, selected?.status, view]);
+  }, [profiles, selected?.id, selected?.status, selectedId, view]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const previousRunningCount = previousRunningCountRef.current;
+    previousRunningCountRef.current = runningProfiles.length;
+
+    if (previousRunningCount !== 0 || runningProfiles.length !== 1) return;
+
+    const onlyRunningProfile = runningProfiles[0];
+    if (!onlyRunningProfile) return;
+
+    setSelectedId(onlyRunningProfile.id);
+    setView("view");
+    setVncMaximized(false);
+  }, [loading, runningProfiles]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
@@ -164,15 +211,27 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
 
   const handleStop = useCallback(async () => {
     if (!selectedId) return;
+    const fallbackProfile = getLongestRunningProfile(profiles, selectedId);
     await stop(selectedId);
-    setView("edit");
+    if (fallbackProfile) {
+      setSelectedId(fallbackProfile.id);
+      setView("view");
+    } else {
+      setView("edit");
+    }
     setVncMaximized(false);
-  }, [selectedId, stop]);
+  }, [profiles, selectedId, stop]);
 
   const handleVncDisconnect = useCallback(() => {
-    setView("edit");
+    const fallbackProfile = getLongestRunningProfile(profiles, selectedId);
+    if (fallbackProfile) {
+      setSelectedId(fallbackProfile.id);
+      setView("view");
+    } else {
+      setView("edit");
+    }
     setVncMaximized(false);
-  }, []);
+  }, [profiles, selectedId]);
 
   if (loading) {
     return (
