@@ -336,22 +336,52 @@ def _filter_rfb_client_messages(data: bytes) -> bytes:
     Rewrites PointerEvents from 6-byte standard to 11-byte KasmVNC format
     and strips unsupported pseudo-encodings from SetEncodings.
     """
+    filtered, _ = _filter_rfb_client_message_stream(data)
+    return filtered
+
+
+def _rfb_needs_more_header_bytes(data: bytes, offset: int) -> bool:
+    """Return True when a variable-length message header is split."""
+    if offset >= len(data):
+        return False
+    msg_type = data[offset]
+    remaining = len(data) - offset
+    return (msg_type == 2 and remaining < 4) or (msg_type == 6 and remaining < 8)
+
+
+def _filter_rfb_client_message_stream(data: bytes) -> tuple[bytes, bytes]:
+    """Filter a chunk of client RFB bytes and return (forwardable, remainder).
+
+    WebSocket frames do not guarantee RFB message boundaries. Keep a trailing
+    partial RFB message for the next frame instead of dropping it; dropping a
+    FramebufferUpdateRequest can leave noVNC waiting forever on a frame that
+    KasmVNC was never asked to send.
+    """
     _log = logging.getLogger("cloakbrowser.manager")
     result = bytearray()
     offset = 0
     msg_idx = 0
+    remainder = b""
     while offset < len(data):
         msg_type = data[offset]
+        if _rfb_needs_more_header_bytes(data, offset):
+            remainder = data[offset:]
+            _log.debug(
+                "RFB filter: buffering incomplete header type=%d have=%d",
+                msg_type, len(remainder),
+            )
+            break
         msg_len = _rfb_msg_length(data, offset)
         if msg_len is None:
             _log.info("RFB filter: DROPPING unknown type=%d at offset=%d/%d, skipping %d trailing bytes, hex=%s",
                        msg_type, offset, len(data), len(data) - offset, data[offset:offset+20].hex())
             break
         if offset + msg_len > len(data):
-            # Incomplete message — DO NOT forward partial data, it desynchronizes
-            # the RFB stream (KasmVNC buffers partial reads across frames).
-            _log.warning("RFB filter: DROPPING incomplete type=%d need=%d have=%d — would desync stream",
-                         msg_type, msg_len, len(data) - offset)
+            remainder = data[offset:]
+            _log.debug(
+                "RFB filter: buffering incomplete type=%d need=%d have=%d",
+                msg_type, msg_len, len(data) - offset,
+            )
             break
         msg_idx += 1
         if msg_type in _RFB_MSG_SIZE:
@@ -368,8 +398,11 @@ def _filter_rfb_client_messages(data: bytes) -> bytes:
             _log.debug("RFB filter: SKIP extension type=%d len=%d at offset=%d (msg #%d in frame)", msg_type, msg_len, offset, msg_idx)
         offset += msg_len
     if len(result) != len(data):
-        _log.info("RFB filter: input=%d output=%d (delta %+d bytes)", len(data), len(result), len(result) - len(data))
-    return bytes(result)
+        _log.info(
+            "RFB filter: input=%d output=%d buffered=%d (delta %+d bytes)",
+            len(data), len(result), len(remainder), len(result) - len(data),
+        )
+    return bytes(result), remainder
 
 
 @asynccontextmanager
@@ -737,6 +770,7 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
                 count = 0
                 handshake = 0  # first 3 messages are RFB handshake
                 dropped = 0
+                pending_rfb = b""
                 try:
                     while True:
                         msg = await websocket.receive()
@@ -756,7 +790,9 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
                                 continue
 
                             # Parse RFB messages and strip unsupported types
-                            filtered = _filter_rfb_client_messages(data)
+                            filtered, pending_rfb = _filter_rfb_client_message_stream(
+                                pending_rfb + data
+                            )
                             if filtered:
                                 # Safety: verify first byte is a valid RFB client type
                                 if filtered[0] not in _RFB_MSG_SIZE:
@@ -766,7 +802,7 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
                                     continue
                                 logger.debug("VNC send: %d bytes first_type=%d hex=%s", len(filtered), filtered[0], filtered[:100].hex())
                                 await vnc_ws.send(filtered)
-                            else:
+                            elif not pending_rfb:
                                 dropped += 1
 
                         elif "text" in msg and msg["text"]:
@@ -781,6 +817,12 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
                     logger.info("VNC proxy [c->v]: WebSocketDisconnect code=%s after %d msgs (%d dropped)", exc.code, count, dropped)
                 except Exception as exc:
                     logger.warning("VNC proxy [c->v]: %s: %s (after %d msgs)", type(exc).__name__, exc, count)
+                finally:
+                    if pending_rfb:
+                        logger.info(
+                            "VNC proxy [c->v]: dropping %d buffered RFB bytes on close",
+                            len(pending_rfb),
+                        )
 
             async def vnc_to_client():
                 count = 0

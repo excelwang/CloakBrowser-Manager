@@ -6,6 +6,7 @@ import struct
 
 from backend.main import (
     _build_server_cut_text,
+    _filter_rfb_client_message_stream,
     _filter_rfb_client_messages,
     _parse_kasmvnc_clipboard,
     _rewrite_pointer_event,
@@ -302,6 +303,30 @@ def test_filter_drops_incomplete():
     data = _make_key_event()[:4]
     result = _filter_rfb_client_messages(data)
     assert result == b""
+
+
+def test_stream_filter_buffers_split_framebuffer_update_request():
+    fb = _make_fb_update_request()
+
+    out1, pending = _filter_rfb_client_message_stream(fb[:4])
+    assert out1 == b""
+    assert pending == fb[:4]
+
+    out2, pending = _filter_rfb_client_message_stream(pending + fb[4:])
+    assert out2 == fb
+    assert pending == b""
+
+
+def test_stream_filter_buffers_split_set_encodings_header():
+    enc = _make_set_encodings([0, 1])
+
+    out1, pending = _filter_rfb_client_message_stream(enc[:2])
+    assert out1 == b""
+    assert pending == enc[:2]
+
+    out2, pending = _filter_rfb_client_message_stream(pending + enc[2:])
+    assert out2 == enc
+    assert pending == b""
 
 
 def test_filter_rewrites_pointer():
