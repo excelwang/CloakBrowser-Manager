@@ -5,6 +5,8 @@ import { ProfileViewer } from "./ProfileViewer";
 
 const rfbInstances = vi.hoisted(() => [] as Array<{
   disconnect: ReturnType<typeof vi.fn>;
+  _enabledContinuousUpdates?: boolean;
+  _updateContinuousUpdates?: () => void;
 }>);
 
 vi.mock("@novnc/novnc/core/rfb.js", () => ({
@@ -124,5 +126,17 @@ describe("ProfileViewer", () => {
 
     expect(rfbInstances).toHaveLength(1);
     expect(rfb?.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("keeps noVNC out of continuous update mode", async () => {
+    renderViewer();
+
+    await waitFor(() => expect(rfbInstances).toHaveLength(1));
+    const rfb = rfbInstances[0];
+
+    rfb._enabledContinuousUpdates = true;
+    rfb._updateContinuousUpdates?.();
+
+    expect(rfb._enabledContinuousUpdates).toBe(false);
   });
 });

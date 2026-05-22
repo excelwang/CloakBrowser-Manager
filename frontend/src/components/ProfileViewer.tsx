@@ -18,6 +18,17 @@ interface ProfileViewerProps {
 // X11 keysym for V key (Ctrl is already held in VNC by the time we intercept)
 const XK_v = 0x0076;
 
+function keepNoVncInPullUpdateMode(rfb: any) {
+  // KasmVNC 1.3.x advertises ContinuousUpdates but rejects noVNC's matching
+  // client message. Keep noVNC in request/response mode so frame updates don't
+  // stall after the first page paint.
+  rfb._supportsContinuousUpdates = false;
+  rfb._enabledContinuousUpdates = false;
+  rfb._updateContinuousUpdates = function disableContinuousUpdates() {
+    this._enabledContinuousUpdates = false;
+  };
+}
+
 export function ProfileViewer({
   profile,
   runningProfiles,
@@ -61,6 +72,7 @@ export function ProfileViewer({
         rfb = new RFB(containerRef.current!, wsUrl, {
           wsProtocols: ["binary"],
         });
+        keepNoVncInPullUpdateMode(rfb);
         rfbRef.current = rfb;
 
         rfb.scaleViewport = true;
