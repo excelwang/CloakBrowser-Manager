@@ -38,6 +38,11 @@ export function ProfileViewer({
   const [clipboardSync, setClipboardSync] = useState(initialClipboardSync);
   const [cdpCopied, setCdpCopied] = useState(false);
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
+  const onDisconnectRef = useRef(onDisconnect);
+
+  useEffect(() => {
+    onDisconnectRef.current = onDisconnect;
+  }, [onDisconnect]);
 
   useEffect(() => {
     let rfb: any = null;
@@ -69,7 +74,7 @@ export function ProfileViewer({
         rfb.addEventListener("disconnect", () => {
           if (!cancelled) {
             setConnected(false);
-            onDisconnect();
+            onDisconnectRef.current();
           }
         });
 
@@ -96,7 +101,7 @@ export function ProfileViewer({
       }
       rfbRef.current = null;
     };
-  }, [profileId, onDisconnect]);
+  }, [profileId]);
 
   // Host→VNC: intercept Ctrl+V/Cmd+V at keydown (capture phase)
   // Must fire BEFORE noVNC's canvas listener to prevent the race condition

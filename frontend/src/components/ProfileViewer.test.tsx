@@ -1,7 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Profile } from "../lib/api";
 import { ProfileViewer } from "./ProfileViewer";
+
+const rfbInstances = vi.hoisted(() => [] as Array<{
+  disconnect: ReturnType<typeof vi.fn>;
+}>);
 
 vi.mock("@novnc/novnc/core/rfb.js", () => ({
   default: class MockRFB {
@@ -12,6 +16,9 @@ vi.mock("@novnc/novnc/core/rfb.js", () => ({
     removeEventListener = vi.fn();
     disconnect = vi.fn();
     sendKey = vi.fn();
+    constructor() {
+      rfbInstances.push(this);
+    }
   },
 }));
 
@@ -55,8 +62,8 @@ const profile: Profile = {
   launched_at: "2026-01-01T00:00:00Z",
 };
 
-function renderViewer(overrides: Partial<Parameters<typeof ProfileViewer>[0]> = {}) {
-  const props: Parameters<typeof ProfileViewer>[0] = {
+function viewerProps(overrides: Partial<Parameters<typeof ProfileViewer>[0]> = {}) {
+  return {
     profile,
     runningProfiles: [profile],
     profileId: profile.id,
@@ -68,11 +75,18 @@ function renderViewer(overrides: Partial<Parameters<typeof ProfileViewer>[0]> = 
     onExitMaximize: vi.fn(),
     onDisconnect: vi.fn(),
     ...overrides,
-  };
+  } satisfies Parameters<typeof ProfileViewer>[0];
+}
 
+function renderViewer(overrides: Partial<Parameters<typeof ProfileViewer>[0]> = {}) {
+  const props = viewerProps(overrides);
   render(<ProfileViewer {...props} />);
   return props;
 }
+
+beforeEach(() => {
+  rfbInstances.length = 0;
+});
 
 describe("ProfileViewer", () => {
   it("places the VNC maximize button directly after browser fullscreen", () => {
@@ -97,5 +111,18 @@ describe("ProfileViewer", () => {
 
     expect(screen.queryByLabelText("Maximize VNC")).toBeNull();
     expect(screen.getByLabelText("Exit maximized VNC")).not.toBeNull();
+  });
+
+  it("does not reconnect VNC when only the disconnect callback changes", async () => {
+    const firstProps = viewerProps({ onDisconnect: vi.fn() });
+    const { rerender } = render(<ProfileViewer {...firstProps} />);
+
+    await waitFor(() => expect(rfbInstances).toHaveLength(1));
+    const rfb = rfbInstances[0];
+
+    rerender(<ProfileViewer {...viewerProps({ onDisconnect: vi.fn() })} />);
+
+    expect(rfbInstances).toHaveLength(1);
+    expect(rfb?.disconnect).not.toHaveBeenCalled();
   });
 });
